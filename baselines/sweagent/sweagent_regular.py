@@ -3,6 +3,8 @@ import json
 import logging
 import tempfile
 import base64
+import subprocess
+import os
 
 from datasets import load_dataset, load_from_disk
 from tqdm import tqdm
@@ -27,6 +29,7 @@ CONFIG_FILE_MAP = {
     "testgen-java": CUR_DIR / "testgen_java.yaml",
     "stylereview": CUR_DIR / "stylereview.yaml",
     "reviewfix": CUR_DIR / "reviewfix.yaml",
+    "reviewfix-java": CUR_DIR / "reviewfix_java.yaml",
 }
 
 
@@ -112,7 +115,11 @@ def str2bool(v):
         raise ArgumentTypeError("Boolean value expected.")
 
 def get_reviewfix_faux_problem_statement(instance: dict) -> str:
-    bad_patch = [bp for bp in instance['bad_patches'] if bp['source'] == 'badpatchllm'][0]
+    if 'bad_patches' not in instance or len(instance['bad_patches']) == 0:
+        logger.warning(f"Instance {instance['instance_id']} does not have any bad patches, cannot generate faux problem statement.")
+        return None
+    bad_patch = instance['bad_patches'][0]    
+    # bad_patch = [bp for bp in instance['bad_patches'] if bp['source'] == 'badpatchllm'][0]
     problem_statement = instance['problem_statement']
     bad_patch_text = bad_patch['patch']
     review = bad_patch['review']
@@ -138,6 +145,71 @@ def get_reviewfix_faux_problem_statement(instance: dict) -> str:
       Please carefully review the failed patch and its reviews. Use insight from them to **avoid repeating the same mistakes** and to **guide your reasoning** when implementing the fix."""
     return faux_str
 
+def build_swe_agent_image(base_image_name, tag_name="swe-agent-image:latest"):
+    """
+    Builds a Docker image for SWE-agent with a dynamic base image.
+
+    Args:
+        base_image_name (str): The name of the existing base image (e.g., "ubuntu", "my-custom-image").
+        tag_name (str): The name to give to the new SWE-agent image.
+    """
+    dockerfile_content = f"""
+# Start with your existing base image
+FROM {base_image_name}
+
+# 1. Install Python 3, pip, and venv
+RUN apt update && \\
+    apt install -y python3 python3-pip python3-venv git && \\
+    rm -rf /var/lib/apt/lists/*
+
+# 2. Set Python 3 as the default 'python' command (optional but good practice)
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
+
+# 3. Create a virtual environment for SWE-agent's Python dependencies
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+RUN python3 -m venv $VIRTUAL_ENV
+RUN $VIRTUAL_ENV/bin/pip install --no-cache-dir --upgrade pip setuptools
+
+# 5. Clone the SWE-agent repository into a *sub-directory* to ensure
+#    the root of the repo is clearly defined.
+RUN $VIRTUAL_ENV/bin/pip install -e git+https://github.com/SWE-agent/SWE-agent@bb80cbe#egg=sweagent
+
+# Set a default command or entrypoint if desired, though SWE-agent will likely override this
+# CMD ["bash"]
+"""
+
+    # Create a temporary Dockerfile
+    dockerfile_path = "Dockerfile.tmp"
+    with open(dockerfile_path, "w") as f:
+        f.write(dockerfile_content)
+
+    try:
+        command = [
+            "docker", "build",
+            "-t", tag_name,
+            "-f", dockerfile_path, 
+            "." 
+        ]
+
+        print(f"Executing command: {' '.join(command)}")
+        process = subprocess.run(command, capture_output=True, text=True, check=True)
+        print("Docker build output:")
+        print(process.stdout)
+        if process.stderr:
+            print("Docker build errors (if any):")
+            print(process.stderr)
+        print(f"Successfully built Docker image: {tag_name}")
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error building Docker image: {e}")
+        print(f"STDOUT: {e.stdout}")
+        print(f"STDERR: {e.stderr}")
+    finally:
+        # Clean up the temporary Dockerfile
+        if os.path.exists(dockerfile_path):
+            os.remove(dockerfile_path)
+
 
 def run_sweagent_single(
     instance: dict,
@@ -155,17 +227,23 @@ def run_sweagent_single(
         raise RuntimeError(f"Unknown mode: {mode}")
     
     if 'java' in mode:
-        image = f"mswebench/{instance['repo'].replace('/', '_m_')}:base"
+        base_image = f"mswebench/{instance['repo'].replace('/', '_m_')}:base"
+        image = f"mswebench/{instance['repo'].replace('/', '_m_')}_with_python:base"
+        build_swe_agent_image(base_image, tag_name=image)
     else:
         image = f"sca63/codearena:{instance['instance_id']}"
 
+    print(f"Using image: {image}")
     config_file = CONFIG_FILE_MAP[mode]
 
     with tempfile.NamedTemporaryFile(delete_on_close=False, mode="w") as fp:
 
-        if mode == 'reviewfix':
+        if mode == 'reviewfix' or mode == 'reviewfix-java':
             # use the problem statement to inject prompt, hacky way to modify prompt easily
-            fp.write(get_reviewfix_faux_problem_statement(instance))
+            prompt = get_reviewfix_faux_problem_statement(instance)
+            if prompt is None:
+                return "", ""
+            fp.write(prompt)
         else:
             fp.write(instance['problem_statement'])
 
@@ -302,9 +380,9 @@ if __name__ == '__main__':
     parser.add_argument("-i", "--input_tasks", type=str, required=True)
     parser.add_argument("--instance_ids", type=str, required=False, default=None)
     parser.add_argument("-o", "--output_dir", type=str, required=True)
-    parser.add_argument("-m", "--model_name", type=str, default="gemini/gemini-2.5-flash-preview-04-17")
+    parser.add_argument("-m", "--model_name", type=str, default="gemini/gemini-2.5-flash")
     parser.add_argument("-k", "--api_key", type=str, default=None)
-    parser.add_argument("--mode", type=str, default="bugfixing", choices=["bugfixing", "testgen", "bugfixing-java", "testgen-java", "stylereview", "reviewfix"])
+    parser.add_argument("--mode", type=str, default="bugfixing", choices=["bugfixing", "testgen", "bugfixing-java", "testgen-java", "stylereview", "reviewfix", "reviewfix-java"])
     parser.add_argument("--thinking_budget", type=int, default=0)
     parser.add_argument("--use_apptainer", type=str2bool, default=False, help="run with docker or apptainer")
     args = parser.parse_args()
