@@ -154,29 +154,58 @@ def build_swe_agent_image(base_image_name, tag_name="swe-agent-image:latest"):
         tag_name (str): The name to give to the new SWE-agent image.
     """
     dockerfile_content = f"""
-# Start with your existing base image
 FROM {base_image_name}
 
-# 1. Install Python 3, pip, and venv
 RUN apt update && \\
-    apt install -y python3 python3-pip python3-venv git && \\
+    apt install -y \\
+    build-essential \\
+    wget \\
+    curl \\
+    libssl-dev \\
+    zlib1g-dev \\
+    libbz2-dev \\
+    libreadline-dev \\
+    libsqlite3-dev \\
+    llvm \\
+    libncurses5-dev \\
+    libncursesw5-dev \\
+    xz-utils \\
+    tk-dev \\
+    libffi-dev \\
+    liblzma-dev \\
+    git \\
+    --no-install-recommends && \\
     rm -rf /var/lib/apt/lists/*
 
-# 2. Set Python 3 as the default 'python' command (optional but good practice)
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
+ENV PYTHON_VERSION=3.13.0
+ENV PYTHON_INSTALL_DIR=/usr/local/python-${{PYTHON_VERSION}}
 
-# 3. Create a virtual environment for SWE-agent's Python dependencies
+RUN wget https://www.python.org/ftp/python/${{PYTHON_VERSION}}/Python-${{PYTHON_VERSION}}.tgz && \
+    tar -xvf Python-${{PYTHON_VERSION}}.tgz && \\
+    cd Python-${{PYTHON_VERSION}} && \\
+    ./configure --enable-optimizations --prefix=${{PYTHON_INSTALL_DIR}} && \\
+    make -j$(nproc) && \\
+    make altinstall && \\
+    cd .. && \\
+    rm -rf Python-${{PYTHON_VERSION}} Python-${{PYTHON_VERSION}}.tgz
+
+ENV PATH="${{PYTHON_INSTALL_DIR}}/bin:${{PATH}}"
+
+RUN ln -s ${{PYTHON_INSTALL_DIR}}/bin/python3.13 /usr/local/bin/python3 && \\
+    ln -s ${{PYTHON_INSTALL_DIR}}/bin/pip3.13 /usr/local/bin/pip3
+
+RUN apt update && \\
+    apt install -y git && \\
+    rm -rf /var/lib/apt/lists/*
+
 ENV VIRTUAL_ENV=/opt/venv
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN python3 -m venv $VIRTUAL_ENV
-RUN $VIRTUAL_ENV/bin/pip install --no-cache-dir --upgrade pip setuptools
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+RUN pip install --no-cache-dir --upgrade pip setuptools
 
-# 5. Clone the SWE-agent repository into a *sub-directory* to ensure
-#    the root of the repo is clearly defined.
-RUN $VIRTUAL_ENV/bin/pip install -e git+https://github.com/SWE-agent/SWE-agent@bb80cbe#egg=sweagent
 
-# Set a default command or entrypoint if desired, though SWE-agent will likely override this
-# CMD ["bash"]
+# install the main SWE-agent
+RUN pip install git+https://github.com/SWE-agent/SWE-agent.git
 """
 
     # Create a temporary Dockerfile

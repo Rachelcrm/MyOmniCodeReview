@@ -46,7 +46,7 @@ with open(report_path, 'r') as f:
     report = json.load(f)
 
 if args.language == 'python':
-    unresolved = report[args.instance_id]['unresolved']
+    unresolved = not report[args.instance_id]['resolved']
 elif args.language == 'java':
     unresolved = report['unresolved_instances'] > 0
 if not unresolved:
