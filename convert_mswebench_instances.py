@@ -42,15 +42,33 @@ def main():
         sys.exit(1)
     dataset_path = sys.argv[1]
     if not os.path.isfile(dataset_path):
-        print(f"File not found: {dataset_path}")
-        sys.exit(1)
-    instances = process_dataset_file(dataset_path)
+        if not os.path.isdir(dataset_path):
+            print(f"{dataset_path} does not exist")
+            sys.exit(1)
+        print(f"{dataset_path} is a directory, processing all JSONL files in it")
+        dataset_files = [os.path.join(dataset_path, f) for f in os.listdir(dataset_path) if f.endswith("_dataset.jsonl")]
+        if not dataset_files:
+            print(f"No dataset files found in {dataset_path}")
+            sys.exit(1)
+        instances = []
+        for dataset_file in dataset_files:
+            print(f"Processing dataset file: {dataset_file}")
+            instances.extend(process_dataset_file(dataset_file))
+    else:
+        print(f"Processing single dataset file: {dataset_path}")
+        if not dataset_path.endswith("_dataset.jsonl"):
+            print(f"Expected dataset file to end with '_dataset.jsonl', got {dataset_path}")
+            sys.exit(1)
+        if not os.path.isfile(dataset_path):
+            print(f"Dataset file does not exist: {dataset_path}")
+            sys.exit(1)
+        instances = process_dataset_file(dataset_path)
     # out_path = dataset_path.replace("_dataset.jsonl", "_instances.json")
     # with open(out_path, "w") as out_f:
     #     json.dump(instances, out_f, indent=2)
     # print(f"Wrote {len(instances)} instances to {out_path}")
     # codearena_instance_path = "data/codearena_instances_java.json"
-    codearena_instance_path = "data/multiswebench_data/multiswebench_instances.json"
+    codearena_instance_path = "data/multiswebench_data/mswebench_instances.json"
     # Load existing instances if file exists
     if os.path.isfile(codearena_instance_path):
         with open(codearena_instance_path, "r") as f:
