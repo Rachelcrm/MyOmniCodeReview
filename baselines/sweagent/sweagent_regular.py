@@ -256,9 +256,7 @@ def run_sweagent_single(
         raise RuntimeError(f"Unknown mode: {mode}")
     
     if 'java' in mode:
-        base_image = f"mswebench/{instance['repo'].replace('/', '_m_')}:base"
-        image = f"mswebench/{instance['repo'].replace('/', '_m_')}_with_python:base"
-        build_swe_agent_image(base_image, tag_name=image)
+        image = f"omnicodeorg/omnicode:{instance['repo'].replace('/', '_')}_base"
     else:
         image = f"sca63/codearena:{instance['instance_id']}"
 
