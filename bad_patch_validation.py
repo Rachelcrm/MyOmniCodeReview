@@ -7,10 +7,10 @@ import sys
 parser = argparse.ArgumentParser(description="Verify Bad Patch")
 parser.add_argument( "--instance_id", help="Instance ID")
 parser.add_argument("--results_folder", help="run evaluation folder name (after logs/run_evaluation/)")
-parser.add_argument("--dataset_name", default="data/codearena_instances.json",
-                    help="Name of the dataset")
-# parser.add_argument("--dataset_name", default="data/java_instances.json",
+# parser.add_argument("--dataset_name", default="data/codearena_instances.json",
 #                     help="Name of the dataset")
+parser.add_argument("--dataset_name", default="data/multiswebench_data/mswebench_instances.json",
+                    help="Name of the dataset")
 parser.add_argument("--language", default="python")
 parser.add_argument("--model", default="none", help="Model used to generate the patch")
 args = parser.parse_args()
@@ -48,6 +48,12 @@ if args.language == 'python':
     unresolved = not report[args.instance_id]['resolved']
 elif args.language == 'java':
     unresolved = report['unresolved_instances'] > 0
+    gen_report_log = os.path.join(results_dir, 'logs', f"run_{args.results_folder}", "gen_report.log")
+    if os.path.exists(gen_report_log):
+        with open(gen_report_log, 'r') as f:
+            gen_report = f.read()
+        if "No valid fix patch result" in gen_report:
+            unresolved = False # The patch failed to apply, but it was not due to a bug in the patch itself
 if not unresolved:
     print('Solved task or Error:', results_dir)
     sys.exit(1)
