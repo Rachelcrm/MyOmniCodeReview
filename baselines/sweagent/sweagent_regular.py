@@ -159,7 +159,7 @@ def run_sweagent_single(
     if 'java' in mode or 'cpp' in mode:
         image = f"omnicodeorg/omnicode:{instance['repo'].replace('/', '_')}_base"
     else:
-        image = f"sca63/codearena:{instance['instance_id']}"
+        image = f"omnicodeorg/omnicode:{instance['instance_id']}"
 
     config_file = CONFIG_FILE_MAP[mode]
 
