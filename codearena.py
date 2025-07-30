@@ -136,6 +136,14 @@ def setup_multiswebench_config(
         os.makedirs(dir_path, exist_ok=True)
         print(f"Created directory: {dir_path}")
 
+    for pred in predictions:
+        if not pred.get("org") or not pred.get("repo"):
+            instance_info = pred["instance_id"].split("_")
+            pred["org"] = instance_info[0]
+            pred["repo"] = instance_info[2]
+            pred["number"] = instance_info[-1]
+            pred["patch"] = pred.get("model_patch", "")
+
     # Get unique repos for image building
     unique_repos = {f"{pred['org']}/{pred['repo']}" for pred in predictions}
     print(f"Will build images for these repos: {unique_repos}")
@@ -535,7 +543,18 @@ def main():
         else:
             try:
                 with open(predictions_map["MSWEBugFixing"], 'r') as f:
-                    predictions = json.load(f)
+                    if predictions_map["MSWEBugFixing"].endswith(".jsonl"):
+                        predictions = []
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            try:
+                                predictions.append(json.loads(line))
+                            except json.JSONDecodeError:
+                                logger.warning("Skipping corrupt line: %r", line)
+                    else:
+                        predictions = json.load(f)
 
                 if args.max_instances > 0 and len(predictions) > args.max_instances:
                     print(f"Limiting to {args.max_instances} instances out of {len(predictions)}")
@@ -547,6 +566,11 @@ def main():
         # Clean existing images if needed
         if args.force_rebuild:
             clean_docker_images(mswe_image_prefix)
+
+        print(f"Loaded {len(predictions)} predictions for Multi-SWE-Bench BugFixing")
+        print(f"type of predictions: {type(predictions)}")
+        if not isinstance(predictions, list):
+            predictions = [predictions]  # Ensure it's a list
 
         # Set up config
         config_file = setup_multiswebench_config(
