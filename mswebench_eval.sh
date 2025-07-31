@@ -4,7 +4,7 @@ set -euo pipefail
 
 INSTANCE_FILE="data/multiswebench_data/mswebench_instance_ids.txt"
 
-PREDS_PATH="baselines/sweagent/logs/sweagent_java_bf/all_preds.jsonl"
+PREDS_PATH="data/patches/sweagent_java_bf.jsonl"
 RUN_ID="sweagent_java_bf_check"
 
 LOG_DIR="slurm_logs/${RUN_ID}"
