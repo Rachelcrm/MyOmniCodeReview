@@ -75,13 +75,24 @@ def generate_gold_patch_predictions(dataset_files, instance_ids=None, max_instan
                 try:
                     item = json.loads(line)
                     item_id = f"{item['org']}/{item['repo']}:{item['number']}"
+                    # Also support underscore format for compatibility
+                    item_id_underscore = f"{item['org']}__{item['repo']}_{item['number']}"
 
-                    # Skip if not in requested instances
-                    if instance_ids and item_id not in instance_ids:
+                    # Skip if not in requested instances (check both formats)
+                    if instance_ids and item_id not in instance_ids and item_id_underscore not in instance_ids:
                         continue
 
-                    # Create prediction entry
+                    # Create prediction entry using underscore format to match existing predictions
                     pred = {
+                        "instance_id": item_id_underscore,  # Use underscore format like existing predictions
+                        "model_name_or_path": "gold_patch",
+                        "full_output": None,
+                        "model_patch": {
+                            "model_name_or_path": "gold",
+                            "instance_id": item_id_underscore,
+                            "model_patch": item.get('fix_patch', '')
+                        },
+                        # Also include legacy fields for compatibility
                         "id": item_id,
                         "org": item['org'],
                         "repo": item['repo'],
@@ -136,6 +147,19 @@ def setup_multiswebench_config(
         dir_path = data_dir / subdir
         os.makedirs(dir_path, exist_ok=True)
         print(f"Created directory: {dir_path}")
+
+    for pred in predictions:
+        if not pred.get("org") or not pred.get("repo"):
+            instance_info = pred["instance_id"].split("_")
+            pred["org"] = instance_info[0]
+            pred["repo"] = instance_info[2]
+            pred["number"] = instance_info[-1]
+            if "model_patch" in pred and "model_patch" in pred["model_patch"]:
+                pred["patch"] = pred["model_patch"]["model_patch"]
+            elif "model_patch" in pred and isinstance(pred["model_patch"], str):
+                pred["patch"] = pred["model_patch"]
+            else:
+                raise RuntimeError("No patch found in data")
 
     # Get unique repos for image building
     unique_repos = {f"{pred['org']}/{pred['repo']}" for pred in predictions}
@@ -302,8 +326,13 @@ def run_multiswebench_phase(config_file, phase="all", timeout=10000):
 
     return None
 
-def clean_docker_images(image_prefix):
-    """Clean up Docker images with the specified prefix."""
+def clean_docker_images(image_prefix, use_apptainer=False):
+    """Clean up Docker/Apptainer images with the specified prefix."""
+    if use_apptainer:
+        # For apptainer, we don't need to clean up images the same way
+        print(f"Skipping image cleanup for apptainer mode with prefix: {image_prefix}")
+        return
+        
     try:
         print(f"Cleaning up Docker images with prefix: {image_prefix}")
         cmd = ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}", f"{image_prefix}*"]
@@ -537,18 +566,70 @@ def main():
         else:
             try:
                 with open(predictions_map["MSWEBugFixing"], 'r') as f:
-                    predictions = json.load(f)
-
+                    if predictions_map["MSWEBugFixing"].endswith(".jsonl"):
+                        predictions = []
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            try:
+                                predictions.append(json.loads(line))
+                            except json.JSONDecodeError:
+                                print(f"Warning: Skipping corrupt line: {line}")
+                    else:
+                        predictions = json.load(f)
+                
+                if args.instance_ids is not None:
+                    # Filter predictions for requested instances
+                    filtered_predictions = [p for p in predictions if p['instance_id'] in args.instance_ids]
+                    
+                    # Check if any requested instances are missing from predictions
+                    found_instance_ids = {p['instance_id'] for p in filtered_predictions}
+                    missing_instance_ids = [iid for iid in args.instance_ids if iid not in found_instance_ids]
+                    
+                    if missing_instance_ids:
+                        print(f"Missing predictions for instances: {missing_instance_ids}")
+                        print("Generating gold patch predictions for missing instances...")
+                        
+                        # Load dataset files to generate gold predictions for missing instances
+                        dataset_base_path = "./multiswebench_local/mswebench_dataset"
+                        dataset_files = []
+                        for root, _, files in os.walk(dataset_base_path):
+                            for file in files:
+                                if file.endswith("_dataset.jsonl"):
+                                    dataset_files.append(os.path.join(root, file))
+                        
+                        if dataset_files:
+                            missing_predictions = generate_gold_patch_predictions(
+                                dataset_files,
+                                missing_instance_ids,
+                                0  # No limit for missing instances
+                            )
+                            print(f"Generated {len(missing_predictions)} gold patch predictions for missing instances")
+                            filtered_predictions.extend(missing_predictions)
+                        else:
+                            print("Warning: No dataset files found to generate missing predictions")
+                    
+                    predictions = filtered_predictions
                 if args.max_instances > 0 and len(predictions) > args.max_instances:
                     print(f"Limiting to {args.max_instances} instances out of {len(predictions)}")
                     predictions = predictions[:args.max_instances]
             except Exception as e:
                 print(f"Error loading predictions file: {e}")
-                return
+                return        
 
         # Clean existing images if needed
         if args.force_rebuild:
-            clean_docker_images(mswe_image_prefix)
+            clean_docker_images(mswe_image_prefix, args.use_apptainer)
+
+        print(f"Loaded {len(predictions)} predictions for Multi-SWE-Bench BugFixing")
+        print(f"type of predictions: {type(predictions)}")
+        if not isinstance(predictions, list):
+            predictions = [predictions]  # Ensure it's a list
+        
+        if len(predictions) == 0:
+            print(f"Found no predictions!")
+            return 
 
         # Set up config
         config_file = setup_multiswebench_config(
