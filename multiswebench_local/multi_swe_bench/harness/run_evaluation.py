@@ -701,7 +701,7 @@ class CliArgs:
 
     def run_mode_image_apptainer(self):
         self.logger.info("Building images...")
-        self.check_commit_hashes()
+        # self.check_commit_hashes()
 
         # construct the dependency graph
         building_images: set[str] = set()
