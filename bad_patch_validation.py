@@ -9,7 +9,7 @@ parser.add_argument( "--instance_id", help="Instance ID")
 parser.add_argument("--results_folder", help="run evaluation folder name (after logs/run_evaluation/)")
 # parser.add_argument("--dataset_name", default="data/codearena_instances.json",
 #                     help="Name of the dataset")
-parser.add_argument("--dataset_name", default="data/multiswebench_data/mswebench_instances.json",
+parser.add_argument("--dataset_name", default="data/agentless_results/result_1.jsonl",
                     help="Name of the dataset")
 parser.add_argument("--language", default="python")
 parser.add_argument("--model", default="none", help="Model used to generate the patch")
@@ -30,7 +30,7 @@ if args.language == 'python':
     report_path = os.path.join(full_dir, 'report.json')
 elif args.language == 'java':
     full_dir = os.path.join(results_dir, 'output', f"run_{args.results_folder}")
-    work_dir_temp = os.path.join(results_dir, 'workdir', f"run_{args.results_folder}")
+    work_dir_temp = os.path.join(results_dir, 'workdir', f"run_{args.results_folder}", "evals")
     for root, dirs, files in os.walk(work_dir_temp):
         if 'fix.patch' in files:
             work_dir = root
@@ -52,14 +52,15 @@ elif args.language == 'java':
     if os.path.exists(gen_report_log):
         with open(gen_report_log, 'r') as f:
             gen_report = f.read()
-        if "No valid fix patch result" in gen_report:
-            unresolved = False # The patch failed to apply, but it was not due to a bug in the patch itself
+        if "There is no valid fix patch result" in gen_report:
+            print('Application Error:', results_dir)
+            sys.exit(1) # The patch failed to apply, but it was not due to a bug in the patch itself
 if not unresolved:
-    print('Solved task or Error:', results_dir)
+    print('Solved task:', results_dir)
     sys.exit(1)
 else:
 
-    with open(args.dataset_name, 'r') as f:
+    with open('data/multiswebench_data/mswebench_instances.json', 'r') as f:
         dataset = json.load(f)
 
     # load the patch from predictions path
@@ -78,18 +79,41 @@ else:
     
     if 'bad_patches' in dataset[task_ix]:
         index = len(dataset[task_ix]['bad_patches']) + 1
-        dataset[task_ix]['bad_patches'].append({
+        res = {
+            "instance_id": args.instance_id,
             "idx": index,
             "source": f"agentless_{args.model}",
             "patch": patch
-            })
+        }
+        # dataset[task_ix]['bad_patches'].append({
+        #     "idx": index,
+        #     "source": f"agentless_{args.model}",
+        #     "patch": patch
+        #     })
     else:
-        dataset[task_ix]['bad_patches'] = [patch]
+        dataset[task_ix]['bad_patches'] = [{
+            "instance_id": args.instance_id,
+            "idx": 1,
+            "source": f"agentless_{args.model}",
+            "patch": patch
+        }]
+        res = {
+            "instance_id": args.instance_id,
+            "idx": 1,
+            "source": f"agentless_{args.model}",
+            "patch": patch
+        }
     # dataset[task_ix]['bad_patch'] = patch
 
-    # save dataset back to json file
-    with open(args.dataset_name, 'w') as f:
-        json.dump(dataset, f, indent=4)
+    # save dataset back to jsonl file
+    if not os.path.exists(args.dataset_name):
+        with open(args.dataset_name, 'w') as f:
+            json.dump(res, f)
+            f.write("\n")
+    else:
+        with open(args.dataset_name, 'a') as f:
+            json.dump(res, f)
+            f.write("\n")
 
     # save gold patch to gold.diff for easy comparison
     gold_path = os.path.join(work_dir, 'gold.diff')

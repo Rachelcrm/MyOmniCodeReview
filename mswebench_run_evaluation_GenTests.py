@@ -110,7 +110,15 @@ def load_mswebench_dataset(instance_ids: list,
                             f_mswedataset.write(json.dumps(item) + "\n")
                             break
 
-def create_multiswebench_config(predictions, dataset_path, max_workers, force_rebuild, run_id, timeout, bad_patch_index = -1, phase="all"):
+def create_multiswebench_config(predictions, 
+                                dataset_path, 
+                                max_workers, 
+                                force_rebuild, 
+                                run_id, 
+                                timeout, 
+                                bad_patch_index = -1, 
+                                phase="all",
+                                use_apptainer: bool = False):
     """Set up configuration for Multi-SWE-Bench evaluation."""
     data_dir = Path("./multiswebench_local/data")
     
@@ -132,7 +140,7 @@ def create_multiswebench_config(predictions, dataset_path, max_workers, force_re
                         "org": org,
                         "repo": repo,
                         "number": number,
-                        "fix_patch": bad_patch[bad_patch_index],
+                        "fix_patch": bad_patch[bad_patch_index]["patch"],
                     }
                     f.write(json.dumps(patch_data) + "\n")
             else:
@@ -168,7 +176,8 @@ def create_multiswebench_config(predictions, dataset_path, max_workers, force_re
         "max_workers_run_instance": max(1, max_workers // 2),
         "log_dir": str("data/logs"),
         "log_level": "INFO",
-        "log_to_console": True
+        "log_to_console": True,
+        "use_apptainer": use_apptainer,
     }
     
     config_file = data_dir / f"{run_id}_{phase}_config.json"
@@ -268,8 +277,8 @@ def run_multiswebench_phase(config_file, phase="all", timeout=1800):
         #     "--config", config_file
         # ]
 
-        env = os.environ.copy()
-        env["PYTHONPATH"] = str(current_dir)  # Ensure Python can find the modules
+        # env = os.environ.copy()
+        # env["PYTHONPATH"] = str(current_dir)  # Ensure Python can find the modules
 
         print(f"Running command with {timeout}s timeout: {' '.join(cmd)}")
 
@@ -360,6 +369,7 @@ def run_instances(
         timeout: int,
         predictions_path,
         dataset_path: str = "./multiswebench_local/data/datasets/dataset.jsonl",
+        use_apptainer: bool = False
     ):
     """
     Run all instances for the given predictions in parallel.
@@ -389,7 +399,8 @@ def run_instances(
         max_workers=max_workers, 
         force_rebuild=force_rebuild, 
         run_id=run_id, 
-        timeout=timeout
+        timeout=timeout,
+        use_apptainer=use_apptainer
     )
     report = run_instance(
         instances=instance_dict,
@@ -415,7 +426,8 @@ def run_instances(
             force_rebuild=force_rebuild, 
             run_id=run_id, 
             timeout=timeout, 
-            bad_patch_index=i
+            bad_patch_index=i,
+            use_apptainer=use_apptainer
         )
         report = run_instance(
             instances=instance_dict,
@@ -492,6 +504,7 @@ def main(
         open_file_limit: int,
         run_id: str,
         timeout: int,
+        use_apptainer: bool = False,
     ):
     """
     Run evaluation harness for the given dataset and predictions.
@@ -540,7 +553,7 @@ def main(
         print("No instances to run.")
     else:
         # dataset => instances in function
-        run_instances(predictions, dataset, cache_level, clean, force_rebuild, max_workers, run_id, timeout, predictions_path=predictions_path)
+        run_instances(predictions, dataset, cache_level, clean, force_rebuild, max_workers, run_id, timeout, predictions_path=predictions_path, use_apptainer=use_apptainer)
 
 
 
