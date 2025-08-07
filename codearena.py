@@ -138,13 +138,12 @@ def setup_multiswebench_config(
 
     # Create all necessary directories with proper f-string formatting
     subdirs = [
-        f"workdir/run_{run_id}",
-        f"logs/run_{run_id}",
-        f"output/run_{run_id}",  # Make output run-specific too
-        f"patches/run_{run_id}",
-        "datasets",
-        "repos",
-        "configs"  # Add configs directory
+        f"workdir/{run_id}",
+        f"logs/{run_id}",
+        f"output/{run_id}",
+        f"patches",
+        f"repos/{run_id}",
+        "configs"
     ]
 
     for subdir in subdirs:
@@ -170,7 +169,7 @@ def setup_multiswebench_config(
     print(f"Will build images for these repos: {unique_repos}")
 
     # Create patches file
-    patch_file = data_dir / "patches" / f"run_{run_id}" / "patches.jsonl"
+    patch_file = data_dir / "patches" / f"{run_id}_patches.jsonl"
     print(f"Writing {len(predictions)} patches to {patch_file}...")
     with open(patch_file, 'w', encoding='utf-8') as f:
         for pred in predictions:
@@ -204,14 +203,14 @@ def setup_multiswebench_config(
     print(f"Creating configuration for phase: {phase}...")
     config = {
         "mode": mode,
-        "workdir": str(data_dir / "workdir" / f"run_{run_id}"),
+        "workdir": str(data_dir / "workdir" / f"{run_id}"),
         "patch_files": [str(patch_file)],
         "dataset_files": dataset_files,
         "force_build": force_rebuild,
-        "output_dir": str(data_dir / "output" / f"run_{run_id}"),  # Make this run-specific
+        "output_dir": str(data_dir / "output" / f"{run_id}"),  # Make this run-specific
         "specifics": [],
         "skips": [],
-        "repo_dir": str(data_dir / "repos"),
+        "repo_dir": str(data_dir / "repos" / f"{run_id}"),
         "need_clone": True,
         "global_env": [],
         "clear_env": True,
@@ -219,7 +218,7 @@ def setup_multiswebench_config(
         "max_workers": max_workers,
         "max_workers_build_image": max(1, max_workers // 2),
         "max_workers_run_instance": max(1, max_workers // 2),
-        "log_dir": str(data_dir / "logs" / f"run_{run_id}"),
+        "log_dir": str(data_dir / "logs" / f"{run_id}"),
         "log_level": "DEBUG",
         "log_to_console": True,
         "use_apptainer": use_apptainer
@@ -365,7 +364,7 @@ def main():
     parser.add_argument("--max_workers", type=int, default=1,
                         help="Number of maximum workers to use")
     parser.add_argument("--run_id", required=True,
-                        help="Run ID for the evaluation")
+                        help="Run ID for the evaluation; please ensure run_id is unique while running parallel instances.")
     parser.add_argument("--instance_ids", nargs="*",
                         help="Optional instance IDs")
     parser.add_argument("--open_file_limit", type=int, default=4096,
