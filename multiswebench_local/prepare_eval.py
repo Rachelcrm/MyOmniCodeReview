@@ -51,7 +51,7 @@ def fix_and_clean():
         # ("fmtlib", "fmt"), # cpp dataset
         # ("jqlang", "jq"), # c dataset
         # JAVA repositories
-        # ("alibaba", "fastjson2"),
+        ("alibaba", "fastjson2"),
         ("elastic", "logstash"),
         ("fasterxml", "jackson-core"),
         ("fasterxml", "jackson-databind"),
@@ -154,7 +154,7 @@ def fix_and_clean():
                     print(f"Added example for {org}/{repo}:{patch_data['number']}")
                     
                     # We only need one instance per repository
-                    break
+                    # break
             
             # If we've found all target repositories, we can stop
             if len(found_repos) == len(target_repos):

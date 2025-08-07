@@ -123,10 +123,14 @@ def setup_multiswebench_config(
     run_id,
     timeout,
     phase="all",
-    use_apptainer=False
+    use_apptainer=False,
+    g2=False
 ):
     """Set up configuration for Multi-SWE-Bench evaluation."""
-    data_dir = Path("multiswebench_runs/BugFixing")
+    if g2:
+        data_dir = Path("/scratch/multiswebench_runs/BugFixing")
+    else:
+        data_dir = Path("multiswebench_runs/BugFixing")
 
     # Create directories
     print("Creating directory structure...")
@@ -408,6 +412,7 @@ def main():
                         default='auto', help="Language for StyleReview, auto for automatic detection")
 
     parser.add_argument("--use_apptainer", type=str2bool, default=False, help="run with docker or apptainer")
+    parser.add_argument("--g2", type=str2bool, default=False, help="run on g2 cluster")
 
     args = parser.parse_args()
 
@@ -639,7 +644,8 @@ def main():
             run_id=args.run_id,
             timeout=args.timeout,
             phase=args.mswe_phase,
-            use_apptainer=args.use_apptainer
+            use_apptainer=args.use_apptainer,
+            g2=args.g2
         )
 
         # Run evaluation

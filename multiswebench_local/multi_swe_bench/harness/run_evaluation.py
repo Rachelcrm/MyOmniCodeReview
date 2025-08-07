@@ -224,6 +224,7 @@ class CliArgs:
         self._check_log_level()
         self._check_log_to_console()
         self._check_max_workers()
+        self._check_use_apptainer()
 
         if self.mode == "evaluation":
             self._check_repo_dir()
