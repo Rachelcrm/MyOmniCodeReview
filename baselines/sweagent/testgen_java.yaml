@@ -19,7 +19,7 @@ agent:
       Follow these steps to resolve the issue:
       1. As a first step, it might be a good idea to find and read code relevant to the <problem_description>
       2. Create a test to reproduce the error and execute it to confirm the error
-      3. Edit the the testing suite of the repo to implement a test for the problem described
+      3. Edit the testing suite of the repo to implement a test for the problem described
       4. Ensure this test runs and successfully reproduces the problem!
       Your thinking should be thorough and so it's fine if it's very long.
     next_step_template: |-
