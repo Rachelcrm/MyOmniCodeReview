@@ -153,6 +153,16 @@ python codearena.py --MSWETestGeneration --dataset_name data/multiswebench_data/
 python codearena.py --MSWETestGeneration --dataset_name data/codearena_instances_java.json --predictions_path gold --run_id MSWE_TestGenGuava --instance_ids google__guava_6586
 ```
 
+### Java Style Review
+Java style review has been configured to work using two different types of tools: Checkstyle and PMD
+
+#### Example Command to run Java Style Review: 
+```bash
+python codearena.py --StyleReview --predictions_path gold --run_id mswe_java_style_review --max_workers 1 --instance_ids "apache/dubbo:10638" --mswe_phase all --force_rebuild True --review_type [pmd,checkstyle]
+```
+
+
+
 #### File Formats
 
 The format for any prediction path other than `gold` should be as follows.
@@ -246,6 +256,27 @@ Example command:
 
 ```bash
 python baselines/sweagent/sweagent_regular.py --input_tasks data/codearena_instances_java.json --api_key [key] --output_dir baselines/sweagent/logs/sweagent_outputs --use_apptainer False --instance_ids google__guava_6586 --mode [bugfixing-java, testgen-java]
+```
+
+### Running SWE-Agent for Java Style Review
+Prerequisites:
+- Dataset should be downloaded from 
+https://drive.google.com/file/d/1ZVg-rVXU9hPN0iO1qsxm-Ru7a5AUmwJU/view?usp=drive_link (PMD)
+https://drive.google.com/file/d/15yDXDq9S-mOOYoNT0na7MqiodvJ8Rf4g/view?usp=drive_link (Checkstyle)
+- Base image should already built in your local docker (e.g. MSWEBugFixing)
+
+```bash
+python baselines/sweagent/convert_style_errors_to_sweagent_from_dataset.py --org apache --repo dubbo --pr_number 10638 --style_tool pmd --output sweagent_input.json
+```
+OR (to use only errors of files modified in gold patch)
+
+```bash
+python baselines/sweagent/convert_filtered_style_errors_to_sweagent_from_dataset.py --org apache --repo dubbo --pr_number 10638 --style_tool pmd --output sweagent_input.json
+```
+
+
+```bash
+python baselines/sweagent/sweagent_regular.py -i sweagent_input.json -o sweagent_pmd_apache_dubbo_10638_results --mode stylereview --style_tool pmd --model_name "gemini/gemini-2.5-flash" --api_key $GEMINI_API_KEY
 ```
 
 ## Adding Bad Patches
