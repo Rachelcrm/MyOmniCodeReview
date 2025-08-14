@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 import importlib
 import json
-import os
+import os, shutil
 import subprocess
 import sys
 import glob
@@ -126,6 +126,7 @@ def setup_multiswebench_config(
     use_apptainer=False,
     g2=False
 ):
+    print(os.listdir("/"))
     """Set up configuration for Multi-SWE-Bench evaluation."""
     if g2:
         data_dir = Path("/scratch/multiswebench_runs/BugFixing")
@@ -221,7 +222,8 @@ def setup_multiswebench_config(
         "log_dir": str(data_dir / "logs" / f"{run_id}"),
         "log_level": "DEBUG",
         "log_to_console": True,
-        "use_apptainer": use_apptainer
+        "use_apptainer": use_apptainer, 
+        "g2": g2,
     }
 
     config_file = data_dir / "configs" / f"{run_id}_{phase}_config.json"
@@ -661,6 +663,8 @@ def main():
                 print("Multi-SWE-Bench BugFixing evaluation failed to produce a report")
         else:
             print("Failed to create config file, cannot run evaluation")
+        if args.g2:
+            shutil.rmtree(f"/scratch/multiswebench_runs/BugFixing/logs/{args.run_id}")
 
     if "MSWETestGeneration" in active_flags:
         print("Executing Multi-SWE-Bench TestGeneration...")
