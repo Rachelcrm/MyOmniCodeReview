@@ -30,10 +30,19 @@ if args.language == 'python':
     report_path = os.path.join(full_dir, 'report.json')
 elif args.language == 'java':
     full_dir = os.path.join(results_dir, 'output', f"run_{args.results_folder}")
-    work_dir_temp = os.path.join(results_dir, 'workdir', f"run_{args.results_folder}", "evals")
+    work_dir_temp = os.path.join(results_dir, 'workdir', f"run_{args.results_folder}")
     for root, dirs, files in os.walk(work_dir_temp):
         if 'fix.patch' in files:
-            work_dir = root
+            # check if directory two up is evals
+
+            if os.path.basename(os.path.dirname(root)) == 'evals':
+                work_dir = root
+            else:
+                print(os.path.basename(os.path.dirname(os.path.dirname(root))))
+                print(os.path.dirname(os.path.dirname(root)))
+                print(os.path.dirname(root))
+                print(root)
+                print(dirs)
             break
     report_path = os.path.join(full_dir, 'final_report.json')
 
@@ -53,8 +62,17 @@ elif args.language == 'java':
         with open(gen_report_log, 'r') as f:
             gen_report = f.read()
         if "There is no valid fix patch result" in gen_report:
-            print('Application Error:', results_dir)
+            print('No valid fix patch:', results_dir)
             sys.exit(1) # The patch failed to apply, but it was not due to a bug in the patch itself
+        elif "Invalid f2p_tests" in gen_report:
+            print('Invalid f2p_tests:', results_dir)
+            sys.exit(1) # The patch failed to apply, but it was not due to
+        elif "No fix for failed test" in gen_report:
+            reason = "No fix for failed test"
+        elif "Test passed in test patch but failed in fix patch" in gen_report:
+            reason = "Test passed in test patch but failed in fix patch"
+        else:
+            reason = "Unknown reason"
 if not unresolved:
     print('Solved task:', results_dir)
     sys.exit(1)
@@ -83,7 +101,8 @@ else:
             "instance_id": args.instance_id,
             "idx": index,
             "source": f"agentless_{args.model}",
-            "patch": patch
+            "patch": patch,
+            "reason": reason
         }
         # dataset[task_ix]['bad_patches'].append({
         #     "idx": index,
@@ -91,17 +110,18 @@ else:
         #     "patch": patch
         #     })
     else:
-        dataset[task_ix]['bad_patches'] = [{
-            "instance_id": args.instance_id,
-            "idx": 1,
-            "source": f"agentless_{args.model}",
-            "patch": patch
-        }]
+        # dataset[task_ix]['bad_patches'] = [{
+        #     "instance_id": args.instance_id,
+        #     "idx": 1,
+        #     "source": f"agentless_{args.model}",
+        #     "patch": patch
+        # }]
         res = {
             "instance_id": args.instance_id,
             "idx": 1,
             "source": f"agentless_{args.model}",
-            "patch": patch
+            "patch": patch,
+            "reason": reason
         }
     # dataset[task_ix]['bad_patch'] = patch
 
