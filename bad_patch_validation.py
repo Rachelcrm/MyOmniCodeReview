@@ -37,13 +37,13 @@ elif args.language == 'java':
 
             if os.path.basename(os.path.dirname(root)) == 'evals':
                 work_dir = root
+                break
             else:
                 print(os.path.basename(os.path.dirname(os.path.dirname(root))))
                 print(os.path.dirname(os.path.dirname(root)))
                 print(os.path.dirname(root))
                 print(root)
                 print(dirs)
-            break
     report_path = os.path.join(full_dir, 'final_report.json')
 
 if not os.path.exists(report_path):
@@ -66,7 +66,10 @@ elif args.language == 'java':
             sys.exit(1) # The patch failed to apply, but it was not due to a bug in the patch itself
         elif "Invalid f2p_tests" in gen_report:
             print('Invalid f2p_tests:', results_dir)
-            sys.exit(1) # The patch failed to apply, but it was not due to
+            sys.exit(1) # The patch failed to apply, but it was not due to a bug in the patch itself
+        elif "Invalid p2p_tests" in gen_report:
+            print('Invalid p2p_tests:', results_dir)
+            sys.exit(1) # The patch failed to apply, but it was not due to a bug in the patch itself
         elif "No fix for failed test" in gen_report:
             reason = "No fix for failed test"
         elif "Test passed in test patch but failed in fix patch" in gen_report:
