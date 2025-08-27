@@ -663,8 +663,17 @@ def main():
                 print("Multi-SWE-Bench BugFixing evaluation failed to produce a report")
         else:
             print("Failed to create config file, cannot run evaluation")
+
         if args.g2:
+            instance_id = args.instance_ids[0]
+            org = instance_id.split("/")[0]
+            repo = instance_id.split("/")[1].split(":")[0]
+            shutil.copytree(f"/scratch/multiswebench_runs/BugFixing/workdir/{args.run_id}/{org}/{repo}/evals", f"/share/dutta/multiswebench_runs/BugFixing/workdir/{args.run_id}", dirs_exist_ok=True)
+            shutil.copytree(f"/scratch/multiswebench_runs/BugFixing/logs/{args.run_id}", f"/share/dutta/multiswebench_runs/BugFixing/logs/{args.run_id}", dirs_exist_ok=True)
+            shutil.copytree(f"/scratch/multiswebench_runs/BugFixing/output/{args.run_id}", f"/share/dutta/multiswebench_runs/BugFixing/output/{args.run_id}", dirs_exist_ok=True)
             shutil.rmtree(f"/scratch/multiswebench_runs/BugFixing/logs/{args.run_id}")
+            shutil.rmtree(f"/scratch/multiswebench_runs/BugFixing/output/{args.run_id}")
+            shutil.rmtree(f"/scratch/multiswebench_runs/BugFixing/workdir/{args.run_id}")
 
     if "MSWETestGeneration" in active_flags:
         print("Executing Multi-SWE-Bench TestGeneration...")

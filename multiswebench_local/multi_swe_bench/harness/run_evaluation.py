@@ -947,9 +947,8 @@ class CliArgs:
             use_apptainer=self.use_apptainer,
         ).run()
         time_cost = (time.time() - start_time) // 60
+        print(f"Evaluation completed, time cost: {time_cost} min")
         self.logger.info(f"Evaluation completed, time cost: {time_cost} min")
-        if self.g2:
-            shutil.copytree(f"/scratch/multiswebench_runs/BugFixing/output/", "/share/dutta/multiswebench_runs/BugFixing/output/", dirs_exist_ok=True)
 
     def run(self):
         if self.mode == "image":
