@@ -3,6 +3,7 @@ import json
 import logging
 import tempfile
 import base64
+import fcntl, os, json
 import subprocess
 import shutil
 
@@ -165,7 +166,7 @@ def run_sweagent_single(
     if 'java' in mode:
         image = f"omnicodeorg/omnicode:{instance['repo'].replace('/', '_')}_base"
     else:
-        image = f"sca63/codearena:{instance['instance_id']}"
+        image = f"omnicodeorg/omnicode:{instance['instance_id']}"
 
     config_file = CONFIG_FILE_MAP[mode]
 
@@ -401,35 +402,35 @@ def main(
     if output_file_path.exists():
         with open(output_file_path) as f:
             for line in f:
-                data = json.loads(line)
-                existing_ids.add(data["instance_id"])
-
-    logger.info(f"Found {len(existing_ids)} existing instance_ids in output.")
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    existing_ids.add(data["instance_id"])
+                except json.JSONDecodeError:
+                    logger.warning("Skipping corrupt line: %r", line)
+    logger.info(f"Read {len(existing_ids)} already completed ids from {output_file_path}")
 
     basic_args = {
         "model_name_or_path": model_name,
     }
 
-    with open(output_file_path, "a+") as f:
-        for datum in tqdm(dataset, desc=f"Inference for {model_name}"):
-            instance_id = datum["instance_id"]
-            if instance_id in existing_ids:
-                continue
-            output_dict = {"instance_id": instance_id}
-            output_dict.update(basic_args)
-            full_output, model_patch = run_sweagent_single(
-                datum,
-                model_name=model_name,
-                output_dir=output_dir_path,
-                api_key=api_key,
-                mode=mode,
-                thinking_budget=thinking_budget,
-                use_apptainer=use_apptainer,
-            )
-            output_dict["full_output"] = full_output
-            output_dict["model_patch"] = model_patch
-            print(json.dumps(output_dict), file=f, flush=True)
-
+    for datum in tqdm(dataset, desc=f"Inference for {model_name}"):
+        instance_id = datum["instance_id"]
+        if instance_id in existing_ids:
+            continue
+        output_dict = {"instance_id": instance_id}
+        output_dict.update(basic_args)
+        full_output, model_patch = run_sweagent_single(datum, model_name=model_name, output_dir=output_dir_path, api_key=api_key, mode=mode, thinking_budget=thinking_budget, use_apptainer=use_apptainer)
+        output_dict["full_output"] = full_output
+        output_dict["model_patch"] = model_patch
+        output_json = json.dumps(output_dict) + '\n'
+        with open(output_file_path, "a") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            f.write(output_json)
+            f.flush(); os.fsync(f.fileno())
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 def str2bool(v):
     if isinstance(v, bool):

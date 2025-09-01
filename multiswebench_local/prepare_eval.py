@@ -47,6 +47,7 @@ def fix_and_clean():
     
     # Target repositories to find
     target_repos = [
+        # ("fmtlib", "fmt"), # cpp dataset
         # ("jqlang", "jq"), # c dataset
         # C++ repositories
         ("catchorg", "Catch2"),
@@ -77,6 +78,7 @@ def fix_and_clean():
     # Mapping of repo types to their dataset files
     repo_file_map = {
         # "jqlang/jq": os.path.join(dataset_base_path, "c/jqlang__jq_dataset.jsonl"),
+        # "fmtlib/fmt": os.path.join(dataset_base_path, "cpp/fmtlib__fmt_dataset.jsonl"),
         # C++ repositories
         "catchorg/Catch2": os.path.join(dataset_base_path, "cpp/catchorg__Catch2_dataset.jsonl"),
         "fmtlib/fmt": os.path.join(dataset_base_path, "cpp/fmtlib__fmt_dataset.jsonl"),
@@ -87,6 +89,7 @@ def fix_and_clean():
         # "alibaba/fastjson2": os.path.join(dataset_base_path, "java/alibaba__fastjson2_dataset.jsonl"),
         "apache/dubbo": os.path.join(dataset_base_path, "java/apache__dubbo_dataset.jsonl"),
         "alibaba/fastjson2": os.path.join(dataset_base_path, "java/alibaba__fastjson2_dataset.jsonl"),
+        "apache/dubbo": os.path.join(dataset_base_path, "java/apache__dubbo_dataset.jsonl"),
         "mockito/mockito": os.path.join(dataset_base_path, "java/mockito__mockito_dataset.jsonl"),
         "elastic/logstash": os.path.join(dataset_base_path, "java/elastic__logstash_dataset.jsonl"),
         "fasterxml/jackson-core": os.path.join(dataset_base_path, "java/fasterxml__jackson-core_dataset.jsonl"),
@@ -166,7 +169,7 @@ def fix_and_clean():
                     print(f"Added example for {org}/{repo}:{patch_data['number']}")
                     
                     # We only need one instance per repository
-                    break
+                    # break
             
             # If we've found all target repositories, we can stop
             if len(found_repos) == len(target_repos):
