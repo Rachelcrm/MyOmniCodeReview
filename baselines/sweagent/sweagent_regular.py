@@ -9,6 +9,7 @@ from datasets import load_dataset, load_from_disk
 from tqdm import tqdm
 from jinja2 import Template
 import pandas as pd
+import shutil
 
 from sweagent.run.run import main as sweagent_main
 from sweagent.run.run_single import RunSingle, RunSingleConfig
@@ -148,6 +149,7 @@ def run_sweagent_single(
     mode: str = "bugfixing",
     thinking_budget: int | None = None,
     use_apptainer: bool = False,
+    g2: bool = False,
 ):
 
     url = f"https://github.com/{instance['repo']}"
@@ -209,6 +211,7 @@ def run_sweagent_single(
                 raise RuntimeError(f"Cannot use thinking budget with non-gemini model: {model_name}")
         
         args.append(f"--use_apptainer={str(use_apptainer).lower()}")
+        args.append(f"--g2={str(g2).lower()}")
 
         sweagent_main(args)
 
@@ -244,6 +247,8 @@ def main(
     mode: str = "bugfixing",
     thinking_budget: int | None = None,
     use_apptainer: bool = False,
+    g2: bool = False,
+    output_file: Path = None,
 ):
     if input_tasks_path.exists():
         if input_tasks_path.suffix.endswith("json"):
@@ -270,7 +275,11 @@ def main(
     existing_ids = set()
 
     output_dir_path.mkdir(parents=True, exist_ok=True)
-    output_file_path = output_dir_path / "all_preds.jsonl"
+    if output_file is not None:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file_path = output_file
+    else:
+        output_file_path = output_dir_path / "all_preds.jsonl"
 
     if output_file_path.exists():
         with open(output_file_path) as f:
@@ -295,7 +304,7 @@ def main(
             continue
         output_dict = {"instance_id": instance_id}
         output_dict.update(basic_args)
-        full_output, model_patch = run_sweagent_single(datum, model_name=model_name, output_dir=output_dir_path, api_key=api_key, mode=mode, thinking_budget=thinking_budget, use_apptainer=use_apptainer)
+        full_output, model_patch = run_sweagent_single(datum, model_name=model_name, output_dir=output_dir_path, api_key=api_key, mode=mode, thinking_budget=thinking_budget, use_apptainer=use_apptainer, g2=g2)
         output_dict["full_output"] = full_output
         output_dict["model_patch"] = model_patch
         output_json = json.dumps(output_dict) + '\n'
@@ -304,6 +313,10 @@ def main(
             f.write(output_json)
             f.flush(); os.fsync(f.fileno())
             fcntl.flock(f, fcntl.LOCK_UN)
+
+        if g2:
+            shutil.copytree(str(output_dir_path/instance_id), f"/share/dutta/baselines/logs/{instance_id}", dirs_exist_ok=True)
+            shutil.rmtree(str(output_dir_path/instance_id))
 
 if __name__ == '__main__':
 
@@ -317,6 +330,8 @@ if __name__ == '__main__':
     parser.add_argument("--mode", type=str, default="bugfixing", choices=["bugfixing", "testgen", "bugfixing-java", "testgen-java", "stylereview", "reviewfix"])
     parser.add_argument("--thinking_budget", type=int, default=0)
     parser.add_argument("--use_apptainer", type=str2bool, default=False, help="run with docker or apptainer")
+    parser.add_argument("--g2", type=str2bool, default=False, help="write container with /scratch directory")
+    parser.add_argument("--output_file", type=str, default=None, help="aggregate all predictions into this file, especially using g2=True")
     args = parser.parse_args()
 
     main(
@@ -328,5 +343,7 @@ if __name__ == '__main__':
         mode=args.mode,
         # thinking_budget=args.thinking_budget,
         use_apptainer=args.use_apptainer,
+        g2=args.g2,
+        output_file=Path(args.output_file) if args.output_file is not None else None,
     )
 
