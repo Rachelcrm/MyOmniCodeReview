@@ -49,8 +49,14 @@ def fix_and_clean():
     target_repos = [
         # ("fmtlib", "fmt"), # cpp dataset
         # ("jqlang", "jq"), # c dataset
+        # C++ repositories
+        ("catchorg", "Catch2"),
+        ("fmtlib", "fmt"),
+        ("nlohmann", "json"),
+        ("simdjson", "simdjson"),
+        ("yhirose", "cpp-httplib"),
         # JAVA repositories
-        ("alibaba", "fastjson2"),
+        # ("alibaba", "fastjson2"),
         ("apache", "dubbo"),
         ("elastic", "logstash"),
         ("fasterxml", "jackson-core"),
@@ -73,6 +79,15 @@ def fix_and_clean():
     repo_file_map = {
         # "jqlang/jq": os.path.join(dataset_base_path, "c/jqlang__jq_dataset.jsonl"),
         # "fmtlib/fmt": os.path.join(dataset_base_path, "cpp/fmtlib__fmt_dataset.jsonl"),
+        # C++ repositories
+        "catchorg/Catch2": os.path.join(dataset_base_path, "cpp/catchorg__Catch2_dataset.jsonl"),
+        "fmtlib/fmt": os.path.join(dataset_base_path, "cpp/fmtlib__fmt_dataset.jsonl"),
+        "nlohmann/json": os.path.join(dataset_base_path, "cpp/nlohmann__json_dataset.jsonl"),
+        "simdjson/simdjson": os.path.join(dataset_base_path, "cpp/simdjson__simdjson_dataset.jsonl"),
+        "yhirose/cpp-httplib": os.path.join(dataset_base_path, "cpp/yhirose__cpp-httplib_dataset.jsonl"),
+        # JAVA repositories
+        # "alibaba/fastjson2": os.path.join(dataset_base_path, "java/alibaba__fastjson2_dataset.jsonl"),
+        "apache/dubbo": os.path.join(dataset_base_path, "java/apache__dubbo_dataset.jsonl"),
         "alibaba/fastjson2": os.path.join(dataset_base_path, "java/alibaba__fastjson2_dataset.jsonl"),
         "apache/dubbo": os.path.join(dataset_base_path, "java/apache__dubbo_dataset.jsonl"),
         "mockito/mockito": os.path.join(dataset_base_path, "java/mockito__mockito_dataset.jsonl"),
