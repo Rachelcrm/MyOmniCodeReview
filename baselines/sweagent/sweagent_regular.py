@@ -3,6 +3,7 @@ import json
 import logging
 import tempfile
 import base64
+import fcntl, os, json
 import subprocess
 import shutil
 import os
@@ -27,7 +28,9 @@ CONFIG_FILE_MAP = {
     "bugfixing": CUR_DIR / "bugfixing.yaml",
     "testgen": CUR_DIR / "testgen.yaml",
     "bugfixing-java": CUR_DIR / "bugfixing_java.yaml",
+    "bugfixing-cpp": CUR_DIR / "bugfixing_cpp.yaml",
     "testgen-java": CUR_DIR / "testgen_java.yaml",
+    "testgen-cpp": CUR_DIR / "testgen_cpp.yaml",
     "stylereview": CUR_DIR / "stylereview.yaml",
     "reviewfix": CUR_DIR / "reviewfix.yaml",
     "reviewfix-java": CUR_DIR / "reviewfix_java.yaml",
@@ -262,10 +265,10 @@ def run_sweagent_single(
     if mode not in CONFIG_FILE_MAP:
         raise RuntimeError(f"Unknown mode: {mode}")
     
-    if 'java' in mode:
+    if 'java' or 'cpp' in mode:
         image = f"omnicodeorg/omnicode:{instance['repo'].replace('/', '_')}_base"
     else:
-        image = f"sca63/codearena:{instance['instance_id']}"
+        image = f"omnicodeorg/omnicode:{instance['instance_id']}"
 
     print(f"Using image: {image}")
     config_file = CONFIG_FILE_MAP[mode]
@@ -505,35 +508,35 @@ def main(
     if output_file_path.exists():
         with open(output_file_path) as f:
             for line in f:
-                data = json.loads(line)
-                existing_ids.add(data["instance_id"])
-
-    logger.info(f"Found {len(existing_ids)} existing instance_ids in output.")
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    existing_ids.add(data["instance_id"])
+                except json.JSONDecodeError:
+                    logger.warning("Skipping corrupt line: %r", line)
+    logger.info(f"Read {len(existing_ids)} already completed ids from {output_file_path}")
 
     basic_args = {
         "model_name_or_path": model_name,
     }
 
-    with open(output_file_path, "a+") as f:
-        for datum in tqdm(dataset, desc=f"Inference for {model_name}"):
-            instance_id = datum["instance_id"]
-            if instance_id in existing_ids:
-                continue
-            output_dict = {"instance_id": instance_id}
-            output_dict.update(basic_args)
-            full_output, model_patch = run_sweagent_single(
-                datum,
-                model_name=model_name,
-                output_dir=output_dir_path,
-                api_key=api_key,
-                mode=mode,
-                thinking_budget=thinking_budget,
-                use_apptainer=use_apptainer,
-            )
-            output_dict["full_output"] = full_output
-            output_dict["model_patch"] = model_patch
-            print(json.dumps(output_dict), file=f, flush=True)
-
+    for datum in tqdm(dataset, desc=f"Inference for {model_name}"):
+        instance_id = datum["instance_id"]
+        if instance_id in existing_ids:
+            continue
+        output_dict = {"instance_id": instance_id}
+        output_dict.update(basic_args)
+        full_output, model_patch = run_sweagent_single(datum, model_name=model_name, output_dir=output_dir_path, api_key=api_key, mode=mode, thinking_budget=thinking_budget, use_apptainer=use_apptainer)
+        output_dict["full_output"] = full_output
+        output_dict["model_patch"] = model_patch
+        output_json = json.dumps(output_dict) + '\n'
+        with open(output_file_path, "a") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            f.write(output_json)
+            f.flush(); os.fsync(f.fileno())
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -555,7 +558,7 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--output_dir", type=str, required=True)
     parser.add_argument("-m", "--model_name", type=str, default="gemini/gemini-2.5-flash")
     parser.add_argument("-k", "--api_key", type=str, default=None)
-    parser.add_argument("--mode", type=str, default="bugfixing", choices=["bugfixing", "testgen", "bugfixing-java", "testgen-java", "stylereview", "reviewfix", "reviewfix-java"])
+    parser.add_argument("--mode", type=str, default="bugfixing", choices=["bugfixing", "testgen", "bugfixing-java", "testgen-java", "bugfixing-cpp", "testgen-cpp", "stylereview", "reviewfix", "reviewfix-java"])
     parser.add_argument("--thinking_budget", type=int, default=0)
     parser.add_argument("--style_tool", type=str, default=None, choices=["checkstyle", "pmd"], help="Style review tool to use (Java)")
     parser.add_argument("--use_apptainer", type=str2bool, default=False, help="Run with Docker or Apptainer container")

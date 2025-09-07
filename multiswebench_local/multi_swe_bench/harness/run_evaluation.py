@@ -5,7 +5,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, Literal, Optional
-import shutil
+import shutil, os, time
 
 from dataclasses_json import dataclass_json
 from tqdm import tqdm
@@ -172,6 +172,14 @@ def get_parser() -> ArgumentParser:
         help="Whether use apptainer to run multi-swe-bench.",
     )
 
+    parser.add_argument(
+        "--g2",
+        type=parser.bool,
+        required=False,
+        default=False,
+        help="Whether use g2 to run multi-swe-bench.",
+    )
+
     return parser
 
 
@@ -214,6 +222,7 @@ class CliArgs:
     log_level: str
     log_to_console: bool
     use_apptainer: bool
+    g2: bool
 
     def __post_init__(self):
         self._check_mode()
@@ -224,6 +233,8 @@ class CliArgs:
         self._check_log_level()
         self._check_log_to_console()
         self._check_max_workers()
+        self._check_use_apptainer()
+        self._check_g2()
 
         if self.mode == "evaluation":
             self._check_repo_dir()
@@ -340,6 +351,10 @@ class CliArgs:
     def _check_use_apptainer(self):
         if not isinstance(self.use_apptainer, bool):
             raise ValueError(f"Invalid use_apptainer: {self.use_apptainer}")
+    
+    def _check_g2(self):
+        if not isinstance(self.g2, bool):
+            raise ValueError(f"Invalid g2: {self.g2}")
 
     @property
     def logger(self) -> logging.Logger:
@@ -618,6 +633,7 @@ class CliArgs:
                 self.log_level,
                 False,
             ),
+            self.g2,  # whether use g2 to run multi-swe-bench
         )
         self.logger.info(f"Image {image.image_full_name()} built successfully.")
 
@@ -838,6 +854,7 @@ class CliArgs:
                 image_dir,
                 run_command,
                 output_path,
+                self.logger,
             )
             return output
 
@@ -912,6 +929,7 @@ class CliArgs:
             self.run_mode_instance_only()
 
     def run_mode_evaluation(self):
+        start_time = time.time()
         self.run_mode_instance()
         self.logger.info("Running evaluation...")
         ReportBuilder(
@@ -928,6 +946,9 @@ class CliArgs:
             log_to_console=self.log_to_console,
             use_apptainer=self.use_apptainer,
         ).run()
+        time_cost = (time.time() - start_time) // 60
+        print(f"Evaluation completed, time cost: {time_cost} min")
+        self.logger.info(f"Evaluation completed, time cost: {time_cost} min")
 
     def run(self):
         if self.mode == "image":

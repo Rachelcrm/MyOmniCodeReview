@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 import importlib
 import json
-import os
+import os, shutil
 import subprocess
 import sys
 import glob
@@ -75,13 +75,24 @@ def generate_gold_patch_predictions(dataset_files, instance_ids=None, max_instan
                 try:
                     item = json.loads(line)
                     item_id = f"{item['org']}/{item['repo']}:{item['number']}"
+                    # Also support underscore format for compatibility
+                    item_id_underscore = f"{item['org']}__{item['repo']}_{item['number']}"
 
-                    # Skip if not in requested instances
-                    if instance_ids and item_id not in instance_ids:
+                    # Skip if not in requested instances (check both formats)
+                    if instance_ids and item_id not in instance_ids and item_id_underscore not in instance_ids:
                         continue
 
-                    # Create prediction entry
+                    # Create prediction entry using underscore format to match existing predictions
                     pred = {
+                        "instance_id": item_id_underscore,  # Use underscore format like existing predictions
+                        "model_name_or_path": "gold_patch",
+                        "full_output": None,
+                        "model_patch": {
+                            "model_name_or_path": "gold",
+                            "instance_id": item_id_underscore,
+                            "model_patch": item.get('fix_patch', '')
+                        },
+                        # Also include legacy fields for compatibility
                         "id": item_id,
                         "org": item['org'],
                         "repo": item['repo'],
@@ -112,10 +123,15 @@ def setup_multiswebench_config(
     run_id,
     timeout,
     phase="all",
-    use_apptainer=False
+    use_apptainer=False,
+    g2=False
 ):
+    print(os.listdir("/"))
     """Set up configuration for Multi-SWE-Bench evaluation."""
-    data_dir = Path("multiswebench_runs/BugFixing")
+    if g2:
+        data_dir = Path("/scratch/multiswebench_runs/BugFixing")
+    else:
+        data_dir = Path("multiswebench_runs/BugFixing")
 
     # Create directories
     print("Creating directory structure...")
@@ -123,19 +139,31 @@ def setup_multiswebench_config(
 
     # Create all necessary directories with proper f-string formatting
     subdirs = [
-        f"workdir/run_{run_id}",
-        f"logs/run_{run_id}",
-        f"output/run_{run_id}",  # Make output run-specific too
-        f"patches/run_{run_id}",
-        "datasets",
-        "repos",
-        "configs"  # Add configs directory
+        f"workdir/{run_id}",
+        f"logs/{run_id}",
+        f"output/{run_id}",
+        f"patches",
+        f"repos/{run_id}",
+        "configs"
     ]
 
     for subdir in subdirs:
         dir_path = data_dir / subdir
         os.makedirs(dir_path, exist_ok=True)
         print(f"Created directory: {dir_path}")
+
+    for pred in predictions:
+        if not pred.get("org") or not pred.get("repo"):
+            instance_info = pred["instance_id"].split("_")
+            pred["org"] = instance_info[0]
+            pred["repo"] = instance_info[2]
+            pred["number"] = instance_info[-1]
+            if "model_patch" in pred and "model_patch" in pred["model_patch"]:
+                pred["patch"] = pred["model_patch"]["model_patch"]
+            elif "model_patch" in pred and isinstance(pred["model_patch"], str):
+                pred["patch"] = pred["model_patch"]
+            else:
+                raise RuntimeError("No patch found in data")
 
     # Get unique repos for image building
     for pred in predictions:
@@ -149,7 +177,7 @@ def setup_multiswebench_config(
     print(f"Will build images for these repos: {unique_repos}")
 
     # Create patches file
-    patch_file = data_dir / "patches" / f"run_{run_id}" / "patches.jsonl"
+    patch_file = data_dir / "patches" / f"{run_id}_patches.jsonl"
     print(f"Writing {len(predictions)} patches to {patch_file}...")
     with open(patch_file, 'w', encoding='utf-8') as f:
         for pred in predictions:
@@ -183,14 +211,14 @@ def setup_multiswebench_config(
     print(f"Creating configuration for phase: {phase}...")
     config = {
         "mode": mode,
-        "workdir": str(data_dir / "workdir" / f"run_{run_id}"),
+        "workdir": str(data_dir / "workdir" / f"{run_id}"),
         "patch_files": [str(patch_file)],
         "dataset_files": dataset_files,
         "force_build": force_rebuild,
-        "output_dir": str(data_dir / "output" / f"run_{run_id}"),  # Make this run-specific
+        "output_dir": str(data_dir / "output" / f"{run_id}"),  # Make this run-specific
         "specifics": [],
         "skips": [],
-        "repo_dir": str(data_dir / "repos"),
+        "repo_dir": str(data_dir / "repos" / f"{run_id}"),
         "need_clone": True,
         "global_env": [],
         "clear_env": True,
@@ -198,10 +226,11 @@ def setup_multiswebench_config(
         "max_workers": max_workers,
         "max_workers_build_image": max(1, max_workers // 2),
         "max_workers_run_instance": max(1, max_workers // 2),
-        "log_dir": str(data_dir / "logs" / f"run_{run_id}"),
+        "log_dir": str(data_dir / "logs" / f"{run_id}"),
         "log_level": "DEBUG",
         "log_to_console": True,
-        "use_apptainer": use_apptainer
+        "use_apptainer": use_apptainer, 
+        "g2": g2,
     }
 
     config_file = data_dir / "configs" / f"{run_id}_{phase}_config.json"
@@ -309,8 +338,13 @@ def run_multiswebench_phase(config_file, phase="all", timeout=10000):
 
     return None
 
-def clean_docker_images(image_prefix):
-    """Clean up Docker images with the specified prefix."""
+def clean_docker_images(image_prefix, use_apptainer=False):
+    """Clean up Docker/Apptainer images with the specified prefix."""
+    if use_apptainer:
+        # For apptainer, we don't need to clean up images the same way
+        print(f"Skipping image cleanup for apptainer mode with prefix: {image_prefix}")
+        return
+        
     try:
         print(f"Cleaning up Docker images with prefix: {image_prefix}")
         cmd = ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}", f"{image_prefix}*"]
@@ -339,7 +373,7 @@ def main():
     parser.add_argument("--max_workers", type=int, default=1,
                         help="Number of maximum workers to use")
     parser.add_argument("--run_id", required=True,
-                        help="Run ID for the evaluation")
+                        help="Run ID for the evaluation; please ensure run_id is unique while running parallel instances.")
     parser.add_argument("--instance_ids", nargs="*",
                         help="Optional instance IDs")
     parser.add_argument("--open_file_limit", type=int, default=4096,
@@ -387,6 +421,7 @@ def main():
                         default='auto', help="Language for StyleReview, auto for automatic detection")
 
     parser.add_argument("--use_apptainer", type=str2bool, default=False, help="run with docker or apptainer")
+    parser.add_argument("--g2", type=str2bool, default=False, help="run on g2 cluster")
 
     args = parser.parse_args()
 
@@ -546,8 +581,51 @@ def main():
         else:
             try:
                 with open(predictions_map["MSWEBugFixing"], 'r') as f:
-                    predictions = json.load(f)
-
+                    if predictions_map["MSWEBugFixing"].endswith(".jsonl"):
+                        predictions = []
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            try:
+                                predictions.append(json.loads(line))
+                            except json.JSONDecodeError:
+                                print(f"Warning: Skipping corrupt line: {line}")
+                    else:
+                        predictions = json.load(f)
+                
+                if args.instance_ids is not None:
+                    # Filter predictions for requested instances
+                    filtered_predictions = [p for p in predictions if p['instance_id'] in args.instance_ids]
+                    
+                    # Check if any requested instances are missing from predictions
+                    found_instance_ids = {p['instance_id'] for p in filtered_predictions}
+                    missing_instance_ids = [iid for iid in args.instance_ids if iid not in found_instance_ids]
+                    
+                    if missing_instance_ids:
+                        print(f"Missing predictions for instances: {missing_instance_ids}")
+                        print("Generating gold patch predictions for missing instances...")
+                        
+                        # Load dataset files to generate gold predictions for missing instances
+                        dataset_base_path = "./multiswebench_local/mswebench_dataset"
+                        dataset_files = []
+                        for root, _, files in os.walk(dataset_base_path):
+                            for file in files:
+                                if file.endswith("_dataset.jsonl"):
+                                    dataset_files.append(os.path.join(root, file))
+                        
+                        if dataset_files:
+                            missing_predictions = generate_gold_patch_predictions(
+                                dataset_files,
+                                missing_instance_ids,
+                                0  # No limit for missing instances
+                            )
+                            print(f"Generated {len(missing_predictions)} gold patch predictions for missing instances")
+                            filtered_predictions.extend(missing_predictions)
+                        else:
+                            print("Warning: No dataset files found to generate missing predictions")
+                    
+                    predictions = filtered_predictions
                 if args.max_instances > 0 and len(predictions) > args.max_instances:
                     print(f"Limiting to {args.max_instances} instances out of {len(predictions)}")
                     predictions = predictions[:args.max_instances]
@@ -560,15 +638,19 @@ def main():
                             predictions.append(json.loads(line))
                 except Exception as e:
                     print(f"Error loading fallback predictions file: {e}")
-                    return
+                    return        
         # Clean existing images if needed
         if args.force_rebuild:
-            clean_docker_images(mswe_image_prefix)
+            clean_docker_images(mswe_image_prefix, args.use_apptainer)
 
         print(f"Loaded {len(predictions)} predictions for Multi-SWE-Bench BugFixing")
         print(f"type of predictions: {type(predictions)}")
         if not isinstance(predictions, list):
             predictions = [predictions]  # Ensure it's a list
+        
+        if len(predictions) == 0:
+            print(f"Found no predictions!")
+            return 
 
         # Set up config
         config_file = setup_multiswebench_config(
@@ -578,7 +660,8 @@ def main():
             run_id=args.run_id,
             timeout=args.timeout,
             phase=args.mswe_phase,
-            use_apptainer=args.use_apptainer
+            use_apptainer=args.use_apptainer,
+            g2=args.g2
         )
 
         # Run evaluation
@@ -595,6 +678,17 @@ def main():
                 print("Multi-SWE-Bench BugFixing evaluation failed to produce a report")
         else:
             print("Failed to create config file, cannot run evaluation")
+
+        if args.g2:
+            instance_id = args.instance_ids[0]
+            org = instance_id.split("/")[0]
+            repo = instance_id.split("/")[1].split(":")[0]
+            shutil.copytree(f"/scratch/multiswebench_runs/BugFixing/workdir/{args.run_id}/{org}/{repo}/evals", f"/share/dutta/multiswebench_runs/BugFixing/workdir/{args.run_id}", dirs_exist_ok=True)
+            shutil.copytree(f"/scratch/multiswebench_runs/BugFixing/logs/{args.run_id}", f"/share/dutta/multiswebench_runs/BugFixing/logs/{args.run_id}", dirs_exist_ok=True)
+            shutil.copytree(f"/scratch/multiswebench_runs/BugFixing/output/{args.run_id}", f"/share/dutta/multiswebench_runs/BugFixing/output/{args.run_id}", dirs_exist_ok=True)
+            shutil.rmtree(f"/scratch/multiswebench_runs/BugFixing/logs/{args.run_id}")
+            shutil.rmtree(f"/scratch/multiswebench_runs/BugFixing/output/{args.run_id}")
+            shutil.rmtree(f"/scratch/multiswebench_runs/BugFixing/workdir/{args.run_id}")
 
     if "MSWETestGeneration" in active_flags:
         print("Executing Multi-SWE-Bench TestGeneration...")
