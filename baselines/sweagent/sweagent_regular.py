@@ -155,100 +155,6 @@ def get_reviewfix_faux_problem_statement(instance: dict) -> str:
       Please carefully review the failed patch and its reviews. Use insight from them to **avoid repeating the same mistakes** and to **guide your reasoning** when implementing the fix."""
     return faux_str
 
-def build_swe_agent_image(base_image_name, tag_name="swe-agent-image:latest"):
-    """
-    Builds a Docker image for SWE-agent with a dynamic base image.
-
-    Args:
-        base_image_name (str): The name of the existing base image (e.g., "ubuntu", "my-custom-image").
-        tag_name (str): The name to give to the new SWE-agent image.
-    """
-    dockerfile_content = f"""
-FROM {base_image_name}
-
-RUN apt update && \\
-    apt install -y \\
-    build-essential \\
-    wget \\
-    curl \\
-    libssl-dev \\
-    zlib1g-dev \\
-    libbz2-dev \\
-    libreadline-dev \\
-    libsqlite3-dev \\
-    llvm \\
-    libncurses5-dev \\
-    libncursesw5-dev \\
-    xz-utils \\
-    tk-dev \\
-    libffi-dev \\
-    liblzma-dev \\
-    git \\
-    --no-install-recommends && \\
-    rm -rf /var/lib/apt/lists/*
-
-ENV PYTHON_VERSION=3.13.0
-ENV PYTHON_INSTALL_DIR=/usr/local/python-${{PYTHON_VERSION}}
-
-RUN wget https://www.python.org/ftp/python/${{PYTHON_VERSION}}/Python-${{PYTHON_VERSION}}.tgz && \
-    tar -xvf Python-${{PYTHON_VERSION}}.tgz && \\
-    cd Python-${{PYTHON_VERSION}} && \\
-    ./configure --enable-optimizations --prefix=${{PYTHON_INSTALL_DIR}} && \\
-    make -j$(nproc) && \\
-    make altinstall && \\
-    cd .. && \\
-    rm -rf Python-${{PYTHON_VERSION}} Python-${{PYTHON_VERSION}}.tgz
-
-ENV PATH="${{PYTHON_INSTALL_DIR}}/bin:${{PATH}}"
-
-RUN ln -s ${{PYTHON_INSTALL_DIR}}/bin/python3.13 /usr/local/bin/python3 && \\
-    ln -s ${{PYTHON_INSTALL_DIR}}/bin/pip3.13 /usr/local/bin/pip3
-
-RUN apt update && \\
-    apt install -y git && \\
-    rm -rf /var/lib/apt/lists/*
-
-ENV VIRTUAL_ENV=/opt/venv
-RUN python3 -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-RUN pip install --no-cache-dir --upgrade pip setuptools
-
-
-# install the main SWE-agent
-RUN pip install git+https://github.com/SWE-agent/SWE-agent.git
-"""
-
-    # Create a temporary Dockerfile
-    dockerfile_path = "Dockerfile.tmp"
-    with open(dockerfile_path, "w") as f:
-        f.write(dockerfile_content)
-
-    try:
-        command = [
-            "docker", "build",
-            "-t", tag_name,
-            "-f", dockerfile_path, 
-            "." 
-        ]
-
-        print(f"Executing command: {' '.join(command)}")
-        process = subprocess.run(command, capture_output=True, text=True, check=True)
-        print("Docker build output:")
-        print(process.stdout)
-        if process.stderr:
-            print("Docker build errors (if any):")
-            print(process.stderr)
-        print(f"Successfully built Docker image: {tag_name}")
-
-    except subprocess.CalledProcessError as e:
-        print(f"Error building Docker image: {e}")
-        print(f"STDOUT: {e.stdout}")
-        print(f"STDERR: {e.stderr}")
-    finally:
-        # Clean up the temporary Dockerfile
-        if os.path.exists(dockerfile_path):
-            os.remove(dockerfile_path)
-
 
 def run_sweagent_single(
     instance: dict,
@@ -270,7 +176,6 @@ def run_sweagent_single(
     else:
         image = f"omnicodeorg/omnicode:{instance['instance_id']}"
 
-    print(f"Using image: {image}")
     config_file = CONFIG_FILE_MAP[mode]
 
     with tempfile.NamedTemporaryFile(delete_on_close=False, mode="w") as fp:
