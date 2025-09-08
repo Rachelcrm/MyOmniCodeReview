@@ -466,7 +466,6 @@ def main():
             swebench.versioning.constants.MAP_REPO_TO_VERSION_PATHS[instance_repo] = REPO_DATA[instance_repo]["MAP_REPO_TO_VERSION_PATHS"]
             swebench.versioning.constants.MAP_REPO_TO_VERSION_PATTERNS[instance_repo] = REPO_DATA[instance_repo]["MAP_REPO_TO_VERSION_PATTERNS"]
             swebench.harness.constants.MAP_REPO_VERSION_TO_SPECS[instance_repo] = REPO_DATA[instance_repo]["MAP_REPO_VERSION_TO_SPECS"]
-            swebench.harness.constants.MAP_REPO_TO_EXT[instance_repo] = "py"
 
             # from swebench.harness.log_parsers import parse_log_pytest, parse_log_pytest_options, parse_log_pytest_v2
             from swebench.harness.log_parsers.python import parse_log_pytest, parse_log_pytest_options, parse_log_pytest_v2
@@ -494,8 +493,8 @@ def main():
             open_file_limit=args.open_file_limit,
             run_id=args.run_id,
             timeout=args.timeout,
-            namespace=None,
-            rewrite_reports=False,
+            # namespace=,
+            # rewrite_reports=,
             # modal=,
             # instance_image_tag=,
             # report_dir=,

@@ -29,8 +29,8 @@ if args.language == 'python':
     work_dir = full_dir
     report_path = os.path.join(full_dir, 'report.json')
 elif args.language == 'java' or args.language == 'cpp':
-    full_dir = os.path.join(results_dir, 'output', f"run_{args.results_folder}")
-    work_dir_temp = os.path.join(results_dir, 'workdir', f"run_{args.results_folder}")
+    full_dir = os.path.join(results_dir, 'output', f"{args.results_folder}")
+    work_dir_temp = os.path.join(results_dir, 'workdir', f"{args.results_folder}")
     for root, dirs, files in os.walk(work_dir_temp):
         if 'fix.patch' in files:
             # check if directory two up is evals
@@ -50,7 +50,7 @@ if args.language == 'python':
     unresolved = not report[args.instance_id]['resolved']
 elif args.language == 'java' or args.language == 'cpp':
     unresolved = report['unresolved_instances'] > 0
-    gen_report_log = os.path.join(results_dir, 'logs', f"run_{args.results_folder}", "gen_report.log")
+    gen_report_log = os.path.join(results_dir, 'logs', f"{args.results_folder}", "gen_report.log")
     if os.path.exists(gen_report_log):
         with open(gen_report_log, 'r') as f:
             gen_report = f.read()
