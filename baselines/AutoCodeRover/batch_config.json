@@ -1,7 +1,7 @@
 {
-  "input_tasks": "../../data/filtered_dataset/instances.json",
-  "output_dir": "../../results/acr_batch_results",
-  "model_name": "openrouter/meta-llama/llama-4-scout",
+  "input_tasks": "../../data/codearena_instances_python.json",
+  "output_dir": "../../results/claude_sonnet_acr_results",
+  "model_name": "openrouter/anthropic/claude-sonnet-4",
   "acr_root": ".",
   "modes": ["bugfixing", "testgen", "stylereview", "codereview"],
   "intermediate_save_interval": 5,
