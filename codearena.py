@@ -44,6 +44,9 @@ def generate_gold_patch_predictions(dataset_files, instance_ids=None, max_instan
             if ":" in instance_id:
                 repo_part = instance_id.split(":")[0]
                 target_repos.add(repo_part.replace("/", "__"))
+            else:
+                repo_part = instance_id.replace("__", "/").split("_")[0]
+                target_repos.add(repo_part.replace("/", "__"))
 
         # Filter dataset files to only include relevant repos
         filtered_files = []
