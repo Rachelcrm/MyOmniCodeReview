@@ -44,6 +44,9 @@ def generate_gold_patch_predictions(dataset_files, instance_ids=None, max_instan
             if ":" in instance_id:
                 repo_part = instance_id.split(":")[0]
                 target_repos.add(repo_part.replace("/", "__"))
+            else:
+                repo_part = instance_id.replace("__", "/").split("_")[0]
+                target_repos.add(repo_part.replace("/", "__"))
 
         # Filter dataset files to only include relevant repos
         filtered_files = []
@@ -126,7 +129,6 @@ def setup_multiswebench_config(
     use_apptainer=False,
     g2=False
 ):
-    print(os.listdir("/"))
     """Set up configuration for Multi-SWE-Bench evaluation."""
     if g2:
         data_dir = Path("/scratch/multiswebench_runs/BugFixing")
@@ -667,8 +669,8 @@ def main():
 
         if args.g2:
             instance_id = args.instance_ids[0]
-            org = instance_id.split("/")[0]
-            repo = instance_id.split("/")[1].split(":")[0]
+            org = instance_id.split("__")[0]
+            repo = instance_id.split("__")[1].split("_")[0]
             shutil.copytree(f"/scratch/multiswebench_runs/BugFixing/workdir/{args.run_id}/{org}/{repo}/evals", f"/share/dutta/multiswebench_runs/BugFixing/workdir/{args.run_id}", dirs_exist_ok=True)
             shutil.copytree(f"/scratch/multiswebench_runs/BugFixing/logs/{args.run_id}", f"/share/dutta/multiswebench_runs/BugFixing/logs/{args.run_id}", dirs_exist_ok=True)
             shutil.copytree(f"/scratch/multiswebench_runs/BugFixing/output/{args.run_id}", f"/share/dutta/multiswebench_runs/BugFixing/output/{args.run_id}", dirs_exist_ok=True)
