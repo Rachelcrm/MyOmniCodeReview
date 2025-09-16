@@ -24,10 +24,10 @@ def build_prompt(
     base = instance["problem_statement"].strip()
     repo = instance["repo"]
 
-    if mode == "bugfixing":
+    if mode.startswith("bugfixing"):
         return base
 
-    if mode == "testgen":
+    if mode.startswith("testgen"):
         return f"""
 ROLE: autonomous software-engineer inside **{repo}**
 
@@ -40,6 +40,36 @@ The test must be created in the repository's existing test suite and should be r
 Do not make any changes to the non-test code in the repository since we only need to create a reproduction test.
 """.strip()
     
+    if mode.startswith("reviewfix"):
+        if 'bad_patches' not in instance or len(instance['bad_patches']) == 0:
+            logger.warning(f"Instance {instance['instance_id']} does not have any bad patches, cannot generate faux problem statement.")
+            return None
+        bad_patch = instance['bad_patches'][0]    
+        problem_statement = instance['problem_statement']
+        bad_patch_text = bad_patch['patch']
+        review = bad_patch['review']
+        return f"""
+ROLE: autonomous software-engineer inside **{repo}**
+        
+<problem_description>
+{problem_statement}
+</problem_description>
+
+Here is a previous patch attempt that failed to resolve this issue.
+
+<bad_patch>
+{bad_patch_text}
+</bad_patch>
+
+Here is a review that attempts to explain why the patch failed:
+
+<review>
+{review}
+</review>
+
+Implement a fix for the given problem description keeping the failed patch and review in mind. Use insight from them to **avoid repeating the same mistakes** and to **guide your reasoning**."""
+
+
     raise ValueError(f"Unsupported mode '{mode}'")
 
 
